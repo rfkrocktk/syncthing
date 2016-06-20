@@ -248,6 +248,32 @@
       </div>
     </div>
 
+    <!-- Panel: Unacked Notifications -->
+
+    <div ng-if="config && config.options && config.options.unackedNotifications" ng-repeat="message in config.options.unackedNotifications track by $index" class="row">
+      <div class="col-md-12">
+        <div class="panel panel-warning">
+          <div class="panel-heading">
+            <h3 class="panel-title">
+              <div class="panel-icon">
+                <span class="fa fa-exclamation-circle"></span>
+              </div>
+              <span translate>Notification</span>
+            </h3>
+          </div>
+          <div class="panel-body">
+            <p>{{ message }}</p>
+          </div>
+          <div class="panel-footer">
+            <button type="button" class="btn btn-sm btn-default pull-right" ng-click="ackNotification(message)">
+              <span class="fa fa-check"></span>&nbsp;<span translate>OK</span>
+            </button>
+            <div class="clearfix"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- First regular row -->
 
     <div class="row">

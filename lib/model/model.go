@@ -2089,6 +2089,7 @@ func (m *Model) CommitConfiguration(from, to config.Configuration) bool {
 	from.Options.URUniqueID = to.Options.URUniqueID
 	from.Options.ListenAddresses = to.Options.ListenAddresses
 	from.Options.RelaysEnabled = to.Options.RelaysEnabled
+	from.Options.UnackedNotifications = to.Options.UnackedNotifications
 	// All of the other generic options require restart. Or at least they may;
 	// removing this check requires going through those options carefully and
 	// making sure there are individual services that handle them correctly.

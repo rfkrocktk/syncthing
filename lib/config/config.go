@@ -167,6 +167,9 @@ func (cfg *Configuration) prepare(myID protocol.DeviceID) {
 	if cfg.Options.AlwaysLocalNets == nil {
 		cfg.Options.AlwaysLocalNets = []string{}
 	}
+	if cfg.Options.UnackedNotifications == nil {
+		cfg.Options.UnackedNotifications = []string{}
+	}
 
 	// Check for missing, bad or duplicate folder ID:s
 	var seenFolders = map[string]*FolderConfiguration{}

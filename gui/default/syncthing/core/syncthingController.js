@@ -994,6 +994,14 @@ angular.module('syncthing.core')
             $('#advanced').modal("hide");
         };
 
+        $scope.ackNotification = function (notification) {
+            var idx = $scope.config.options.unackedNotifications.indexOf(notification);
+            if (idx > -1) {
+                $scope.config.options.unackedNotifications.splice(idx, 1);
+                $scope.saveConfig();
+            }
+        };
+
         $scope.restart = function () {
             restarting = true;
             $('#restarting').modal();

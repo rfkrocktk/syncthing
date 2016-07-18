@@ -433,9 +433,23 @@ func (f *rwFolder) pullerIteration(ignores *ignore.Matcher) int {
 		l.Debugln(f, "handling", file.Name)
 
 		if !handleFile(file) {
-			// A new or changed file or symlink. This is the only case where we
-			// do stuff concurrently in the background
-			f.queue.Push(file.Name, file.Size, file.Modified)
+			// A new or changed file or symlink. This is the only case where
+			// we do stuff concurrently in the background. We only queue
+			// files where we are connected to at least one device that has
+			// the file.
+
+			available := false
+			devices := folderFiles.Availability(file.Name)
+			for _, dev := range devices {
+				if f.model.ConnectedTo(dev) {
+					available = true
+					break
+				}
+			}
+
+			if available {
+				f.queue.Push(file.Name, file.Size, file.Modified)
+			}
 		}
 
 		changed++

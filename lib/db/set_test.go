@@ -687,3 +687,35 @@ func BenchmarkUpdateOneFile(b *testing.B) {
 
 	b.ReportAllocs()
 }
+
+func TestIndexID(t *testing.T) {
+	ldb := db.OpenMemory()
+
+	s := db.NewFileSet("test", ldb)
+
+	// The Index ID for some random device is zero by default.
+	id := s.IndexID(remoteDevice0)
+	if id != 0 {
+		t.Errorf("index ID for remote device should default to zero, not %d", id)
+	}
+
+	// The Index ID for someone else should be settable
+	s.SetIndexID(remoteDevice0, 42)
+	id = s.IndexID(remoteDevice0)
+	if id != 42 {
+		t.Errorf("index ID for remote device should be remembered; got %d, expected %d", id, 42)
+	}
+
+	// Our own index ID should be generated randomly.
+	id = s.IndexID(protocol.LocalDeviceID)
+	if id == 0 {
+		t.Errorf("index ID for local device should be random, not zero")
+	}
+	t.Logf("random index ID is 0x%016x", id)
+
+	// But of course always the same after that.
+	again := s.IndexID(protocol.LocalDeviceID)
+	if again != id {
+		t.Errorf("index ID changed; %d != %d", again, id)
+	}
+}

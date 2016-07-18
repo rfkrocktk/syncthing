@@ -8,6 +8,7 @@ package model
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
@@ -647,6 +648,10 @@ func (m *Model) ClusterConfig(deviceID protocol.DeviceID, cm protocol.ClusterCon
 
 	tempIndexFolders := make([]string, 0, len(cm.Folders))
 
+	m.pmut.RLock()
+	conn := m.conn[deviceID]
+	m.pmut.RUnlock()
+
 	m.fmut.Lock()
 	for _, folder := range cm.Folders {
 		if !m.folderSharedWithUnlocked(folder.ID, deviceID) {
@@ -661,6 +666,30 @@ func (m *Model) ClusterConfig(deviceID protocol.DeviceID, cm protocol.ClusterCon
 		if !folder.DisableTempIndexes {
 			tempIndexFolders = append(tempIndexFolders, folder.ID)
 		}
+
+		fs := m.folderFiles[folder.ID]
+		myIndexID := fs.IndexID(protocol.LocalDeviceID)
+		var startLocalVersion int64
+
+		for _, dev := range folder.Devices {
+			if bytes.Equal(dev.ID, m.id[:]) {
+				if dev.IndexID == myIndexID {
+					l.Infof("Device %v folder %q is delta index compatible (mlv=%d)", deviceID, folder.ID, dev.MaxLocalVersion)
+					startLocalVersion = dev.MaxLocalVersion
+				} else if dev.IndexID != 0 {
+					l.Infof("Device %v folder %q has mismatching index ID for us (%x != %x)", deviceID, folder.ID, dev.IndexID, myIndexID)
+				}
+			} else if bytes.Equal(dev.ID, deviceID[:]) && dev.IndexID != 0 {
+				theirIndexID := fs.IndexID(deviceID)
+				if dev.IndexID != theirIndexID {
+					l.Infof("Device %v folder %q has a new index ID (%x)", deviceID, folder.ID, dev.IndexID)
+					fs.Replace(deviceID, nil)
+					fs.SetIndexID(deviceID, dev.IndexID)
+				}
+			}
+		}
+
+		go sendIndexes(conn, folder.ID, fs, m.folderIgnores[folder.ID], startLocalVersion)
 	}
 	m.fmut.Unlock()
 
@@ -763,12 +792,6 @@ func (m *Model) Close(device protocol.DeviceID, err error) {
 	})
 
 	m.pmut.Lock()
-	m.fmut.RLock()
-	for _, folder := range m.deviceFolders[device] {
-		m.folderFiles[folder].Replace(device, nil)
-	}
-	m.fmut.RUnlock()
-
 	conn, ok := m.conn[device]
 	if ok {
 		m.progressEmitter.temporaryIndexUnsubscribe(conn)
@@ -1044,13 +1067,6 @@ func (m *Model) AddConnection(conn connections.Connection, hello protocol.HelloR
 
 	cm := m.generateClusterConfig(deviceID)
 	conn.ClusterConfig(cm)
-
-	m.fmut.RLock()
-	for _, folder := range m.deviceFolders[deviceID] {
-		fs := m.folderFiles[folder]
-		go sendIndexes(conn, folder, fs, m.folderIgnores[folder])
-	}
-	m.fmut.RUnlock()
 	m.pmut.Unlock()
 
 	device, ok := m.cfg.Devices()[deviceID]
@@ -1146,15 +1162,15 @@ func (m *Model) receivedFile(folder string, file protocol.FileInfo) {
 	m.folderStatRef(folder).ReceivedFile(file.Name, file.IsDeleted())
 }
 
-func sendIndexes(conn protocol.Connection, folder string, fs *db.FileSet, ignores *ignore.Matcher) {
+func sendIndexes(conn protocol.Connection, folder string, fs *db.FileSet, ignores *ignore.Matcher, startLocalVersion int64) {
 	deviceID := conn.ID()
 	name := conn.Name()
 	var err error
 
-	l.Debugf("sendIndexes for %s-%s/%q starting", deviceID, name, folder)
+	l.Debugf("sendIndexes for %s-%s/%q starting (slv=%d)", deviceID, name, folder, startLocalVersion)
 	defer l.Debugf("sendIndexes for %s-%s/%q exiting: %v", deviceID, name, folder, err)
 
-	minLocalVer, err := sendIndexTo(true, 0, conn, folder, fs, ignores)
+	minLocalVer, err := sendIndexTo(startLocalVersion == 0, startLocalVersion, conn, folder, fs, ignores)
 
 	// Subscribe to LocalIndexUpdated (we have new information to send) and
 	// DeviceDisconnected (it might be us who disconnected, so we should
@@ -1191,7 +1207,7 @@ func sendIndexTo(initial bool, minLocalVer int64, conn protocol.Connection, fold
 	name := conn.Name()
 	batch := make([]protocol.FileInfo, 0, indexBatchSize)
 	currentBatchSize := 0
-	maxLocalVer := int64(0)
+	maxLocalVer := minLocalVer
 	var err error
 
 	sorter := NewIndexSorter()
@@ -1660,6 +1676,8 @@ func (m *Model) generateClusterConfig(device protocol.DeviceID) protocol.Cluster
 	m.fmut.RLock()
 	for _, folder := range m.deviceFolders[device] {
 		folderCfg := m.cfg.Folders()[folder]
+		fs := m.folderFiles[folder]
+
 		protocolFolder := protocol.Folder{
 			ID:                 folder,
 			Label:              folderCfg.Label,
@@ -1676,13 +1694,26 @@ func (m *Model) generateClusterConfig(device protocol.DeviceID) protocol.Cluster
 			// TODO: Set read only bit when relevant, and when we have per device
 			// access controls.
 			deviceCfg := m.cfg.Devices()[device]
+
+			var indexID uint64
+			var maxLocalVersion int64
+			if device == m.id {
+				indexID = fs.IndexID(protocol.LocalDeviceID)
+				maxLocalVersion = fs.LocalVersion(protocol.LocalDeviceID)
+			} else {
+				indexID = fs.IndexID(device)
+				maxLocalVersion = fs.LocalVersion(device)
+			}
+
 			protocolDevice := protocol.Device{
-				ID:          device[:],
-				Name:        deviceCfg.Name,
-				Addresses:   deviceCfg.Addresses,
-				Compression: deviceCfg.Compression,
-				CertName:    deviceCfg.CertName,
-				Introducer:  deviceCfg.Introducer,
+				ID:              device[:],
+				Name:            deviceCfg.Name,
+				Addresses:       deviceCfg.Addresses,
+				Compression:     deviceCfg.Compression,
+				CertName:        deviceCfg.CertName,
+				Introducer:      deviceCfg.Introducer,
+				IndexID:         indexID,
+				MaxLocalVersion: maxLocalVersion,
 			}
 
 			protocolFolder.Devices = append(protocolFolder.Devices, protocolDevice)

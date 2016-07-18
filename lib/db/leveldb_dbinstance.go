@@ -699,6 +699,32 @@ func (db *Instance) globalKeyFolder(key []byte) []byte {
 	return folder
 }
 
+func (db *Instance) getIndexID(device, folder []byte) uint64 {
+	key := db.indexIDKey(device, folder)
+	cur, err := db.Get(key, nil)
+	if err != nil || len(cur) != 8 {
+		return 0
+	}
+	return binary.BigEndian.Uint64(cur)
+}
+
+func (db *Instance) setIndexID(device, folder []byte, id uint64) {
+	key := db.indexIDKey(device, folder)
+	bs := make([]byte, 8)
+	binary.BigEndian.PutUint64(bs, id)
+	if err := db.Put(key, bs, nil); err != nil {
+		panic("storing index ID: " + err.Error())
+	}
+}
+
+func (db *Instance) indexIDKey(device, folder []byte) []byte {
+	k := make([]byte, keyPrefixLen+keyDeviceLen+keyFolderLen)
+	k[0] = KeyTypeIndexID
+	binary.BigEndian.PutUint32(k[keyPrefixLen:], db.deviceIdx.ID(device))
+	binary.BigEndian.PutUint32(k[keyPrefixLen+keyDeviceLen:], db.folderIdx.ID(folder))
+	return k
+}
+
 func unmarshalTrunc(bs []byte, truncate bool) (FileIntf, error) {
 	if truncate {
 		var tf FileInfoTruncated

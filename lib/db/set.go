@@ -17,6 +17,7 @@ import (
 
 	"github.com/syncthing/syncthing/lib/osutil"
 	"github.com/syncthing/syncthing/lib/protocol"
+	"github.com/syncthing/syncthing/lib/rand"
 	"github.com/syncthing/syncthing/lib/sync"
 )
 
@@ -241,6 +242,23 @@ func (s *FileSet) LocalSize() (files, deleted int, bytes int64) {
 
 func (s *FileSet) GlobalSize() (files, deleted int, bytes int64) {
 	return s.globalSize.Size()
+}
+
+func (s *FileSet) IndexID(device protocol.DeviceID) uint64 {
+	id := s.db.getIndexID(device[:], []byte(s.folder))
+	if id == 0 && device == protocol.LocalDeviceID {
+		// No index ID set yet. We create one now.
+		id = uint64(rand.Int64())
+		s.db.setIndexID(device[:], []byte(s.folder), id)
+	}
+	return id
+}
+
+func (s *FileSet) SetIndexID(device protocol.DeviceID, id uint64) {
+	if device == protocol.LocalDeviceID {
+		panic("do not explicitly set index ID for local device")
+	}
+	s.db.setIndexID(device[:], []byte(s.folder), id)
 }
 
 // DropFolder clears out all information related to the given folder from the

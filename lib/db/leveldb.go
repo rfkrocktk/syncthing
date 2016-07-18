@@ -41,6 +41,7 @@ const (
 	KeyTypeVirtualMtime
 	KeyTypeFolderIdx
 	KeyTypeDeviceIdx
+	KeyTypeIndexID
 )
 
 func (l VersionList) String() string {

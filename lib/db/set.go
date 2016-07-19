@@ -117,7 +117,6 @@ func NewFileSet(folder string, db *Instance) *FileSet {
 		return true
 	})
 	l.Debugf("loaded localVersion for %q: %#v", folder, s.localVersion)
-	clock(s.localVersion[protocol.LocalDeviceID])
 
 	return &s
 }
@@ -127,7 +126,12 @@ func (s *FileSet) Replace(device protocol.DeviceID, fs []protocol.FileInfo) {
 	normalizeFilenames(fs)
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	s.localVersion[device] = s.db.replace([]byte(s.folder), device[:], fs, &s.localSize, &s.globalSize)
+	if device == protocol.LocalDeviceID {
+		s.setLocalVersion(fs)
+	} else {
+		s.localVersion[device] = maxLocalVersion(fs)
+	}
+	s.db.replace([]byte(s.folder), device[:], fs, &s.localSize, &s.globalSize)
 	if len(fs) == 0 {
 		// Reset the local version if all files were removed.
 		s.localVersion[device] = 0
@@ -144,6 +148,7 @@ func (s *FileSet) Update(device protocol.DeviceID, fs []protocol.FileInfo) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	if device == protocol.LocalDeviceID {
+		s.setLocalVersion(fs)
 		discards := make([]protocol.FileInfo, 0, len(fs))
 		updates := make([]protocol.FileInfo, 0, len(fs))
 		for _, newFile := range fs {
@@ -155,10 +160,10 @@ func (s *FileSet) Update(device protocol.DeviceID, fs []protocol.FileInfo) {
 		}
 		s.blockmap.Discard(discards)
 		s.blockmap.Update(updates)
+	} else {
+		s.localVersion[device] = maxLocalVersion(fs)
 	}
-	if lv := s.db.updateFiles([]byte(s.folder), device[:], fs, &s.localSize, &s.globalSize); lv > s.localVersion[device] {
-		s.localVersion[device] = lv
-	}
+	s.db.updateFiles([]byte(s.folder), device[:], fs, &s.localSize, &s.globalSize)
 }
 
 func (s *FileSet) WithNeed(device protocol.DeviceID, fn Iterator) {
@@ -259,6 +264,27 @@ func (s *FileSet) SetIndexID(device protocol.DeviceID, id uint64) {
 		panic("do not explicitly set index ID for local device")
 	}
 	s.db.setIndexID(device[:], []byte(s.folder), id)
+}
+
+func (s *FileSet) setLocalVersion(fs []protocol.FileInfo) {
+	cur := s.localVersion[protocol.LocalDeviceID]
+	for i := range fs {
+		if fs[i].LocalVersion == 0 {
+			cur++
+			fs[i].LocalVersion = cur
+		}
+	}
+	s.localVersion[protocol.LocalDeviceID] = cur
+}
+
+func maxLocalVersion(fs []protocol.FileInfo) int64 {
+	var max int64
+	for _, f := range fs {
+		if f.LocalVersion > max {
+			max = f.LocalVersion
+		}
+	}
+	return max
 }
 
 // DropFolder clears out all information related to the given folder from the

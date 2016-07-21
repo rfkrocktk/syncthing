@@ -14,6 +14,7 @@ package db
 
 import (
 	stdsync "sync"
+	"sync/atomic"
 
 	"github.com/syncthing/syncthing/lib/osutil"
 	"github.com/syncthing/syncthing/lib/protocol"
@@ -22,13 +23,14 @@ import (
 )
 
 type FileSet struct {
-	localVersion map[protocol.DeviceID]int64
-	mutex        sync.Mutex
-	folder       string
-	db           *Instance
-	blockmap     *BlockMap
-	localSize    sizeTracker
-	globalSize   sizeTracker
+	localVersion       int64
+	remoteLocalVersion map[protocol.DeviceID]int64
+	mutex              sync.Mutex
+	folder             string
+	db                 *Instance
+	blockmap           *BlockMap
+	localSize          sizeTracker
+	globalSize         sizeTracker
 }
 
 // FileIntf is the set of methods implemented by both protocol.FileInfo and
@@ -96,11 +98,11 @@ func (s *sizeTracker) Size() (files, deleted int, bytes int64) {
 
 func NewFileSet(folder string, db *Instance) *FileSet {
 	var s = FileSet{
-		localVersion: make(map[protocol.DeviceID]int64),
-		folder:       folder,
-		db:           db,
-		blockmap:     NewBlockMap(db, db.folderIdx.ID([]byte(folder))),
-		mutex:        sync.NewMutex(),
+		remoteLocalVersion: make(map[protocol.DeviceID]int64),
+		folder:             folder,
+		db:                 db,
+		blockmap:           NewBlockMap(db, db.folderIdx.ID([]byte(folder))),
+		mutex:              sync.NewMutex(),
 	}
 
 	s.db.checkGlobals([]byte(folder), &s.globalSize)
@@ -108,11 +110,13 @@ func NewFileSet(folder string, db *Instance) *FileSet {
 	var deviceID protocol.DeviceID
 	s.db.withAllFolderTruncated([]byte(folder), func(device []byte, f FileInfoTruncated) bool {
 		copy(deviceID[:], device)
-		if f.LocalVersion > s.localVersion[deviceID] {
-			s.localVersion[deviceID] = f.LocalVersion
-		}
 		if deviceID == protocol.LocalDeviceID {
+			if f.LocalVersion > s.localVersion {
+				s.localVersion = f.LocalVersion
+			}
 			s.localSize.addFile(f)
+		} else if f.LocalVersion > s.remoteLocalVersion[deviceID] {
+			s.remoteLocalVersion[deviceID] = f.LocalVersion
 		}
 		return true
 	})
@@ -127,15 +131,17 @@ func (s *FileSet) Replace(device protocol.DeviceID, fs []protocol.FileInfo) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	if device == protocol.LocalDeviceID {
-		s.setLocalVersion(fs)
+		if len(fs) == 0 {
+			s.localVersion = 0
+		} else {
+			for i := range fs {
+				fs[i].LocalVersion = atomic.AddInt64(&s.localVersion, 1)
+			}
+		}
 	} else {
-		s.localVersion[device] = maxLocalVersion(fs)
+		s.remoteLocalVersion[device] = maxLocalVersion(fs)
 	}
 	s.db.replace([]byte(s.folder), device[:], fs, &s.localSize, &s.globalSize)
-	if len(fs) == 0 {
-		// Reset the local version if all files were removed.
-		s.localVersion[device] = 0
-	}
 	if device == protocol.LocalDeviceID {
 		s.blockmap.Drop()
 		s.blockmap.Add(fs)
@@ -148,10 +154,10 @@ func (s *FileSet) Update(device protocol.DeviceID, fs []protocol.FileInfo) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	if device == protocol.LocalDeviceID {
-		s.setLocalVersion(fs)
 		discards := make([]protocol.FileInfo, 0, len(fs))
 		updates := make([]protocol.FileInfo, 0, len(fs))
-		for _, newFile := range fs {
+		for i, newFile := range fs {
+			fs[i].LocalVersion = atomic.AddInt64(&s.localVersion, 1)
 			existingFile, ok := s.db.getFile([]byte(s.folder), device[:], []byte(newFile.Name))
 			if !ok || !existingFile.Version.Equal(newFile.Version) {
 				discards = append(discards, existingFile)
@@ -161,7 +167,7 @@ func (s *FileSet) Update(device protocol.DeviceID, fs []protocol.FileInfo) {
 		s.blockmap.Discard(discards)
 		s.blockmap.Update(updates)
 	} else {
-		s.localVersion[device] = maxLocalVersion(fs)
+		s.remoteLocalVersion[device] = maxLocalVersion(fs)
 	}
 	s.db.updateFiles([]byte(s.folder), device[:], fs, &s.localSize, &s.globalSize)
 }
@@ -236,9 +242,13 @@ func (s *FileSet) Availability(file string) []protocol.DeviceID {
 }
 
 func (s *FileSet) LocalVersion(device protocol.DeviceID) int64 {
+	if device == protocol.LocalDeviceID {
+		return atomic.LoadInt64(&s.localVersion)
+	}
+
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	return s.localVersion[device]
+	return s.remoteLocalVersion[device]
 }
 
 func (s *FileSet) LocalSize() (files, deleted int, bytes int64) {
@@ -264,17 +274,6 @@ func (s *FileSet) SetIndexID(device protocol.DeviceID, id uint64) {
 		panic("do not explicitly set index ID for local device")
 	}
 	s.db.setIndexID(device[:], []byte(s.folder), id)
-}
-
-func (s *FileSet) setLocalVersion(fs []protocol.FileInfo) {
-	cur := s.localVersion[protocol.LocalDeviceID]
-	for i := range fs {
-		if fs[i].LocalVersion == 0 {
-			cur++
-			fs[i].LocalVersion = cur
-		}
-	}
-	s.localVersion[protocol.LocalDeviceID] = cur
 }
 
 func maxLocalVersion(fs []protocol.FileInfo) int64 {

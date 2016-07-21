@@ -674,14 +674,31 @@ func (m *Model) ClusterConfig(deviceID protocol.DeviceID, cm protocol.ClusterCon
 		for _, dev := range folder.Devices {
 			if bytes.Equal(dev.ID, m.id[:]) {
 				if dev.IndexID == myIndexID {
+					// They say they've seen our index ID before, so we can
+					// send a delta update only.
 					l.Infof("Device %v folder %q is delta index compatible (mlv=%d)", deviceID, folder.ID, dev.MaxLocalVersion)
 					startLocalVersion = dev.MaxLocalVersion
 				} else if dev.IndexID != 0 {
+					// They say they've seen an index ID from us, but it's
+					// not the right one. Either they are confused or we
+					// must have reset our database since last talking to
+					// them. We'll start with a full index transfer.
 					l.Infof("Device %v folder %q has mismatching index ID for us (%x != %x)", deviceID, folder.ID, dev.IndexID, myIndexID)
 				}
 			} else if bytes.Equal(dev.ID, deviceID[:]) && dev.IndexID != 0 {
 				theirIndexID := fs.IndexID(deviceID)
-				if dev.IndexID != theirIndexID {
+				if dev.IndexID == 0 {
+					// They're not announcing an index ID. This means they
+					// do not support delta indexes and we should clear any
+					// information we have from them before accepting their
+					// index, which will presumably be a full index.
+					fs.Replace(deviceID, nil)
+				} else if dev.IndexID != theirIndexID {
+					// The index ID we have on file is not what they're
+					// announcing. They must have reset their database and
+					// will probably send us a full index. We drop any
+					// information we have and remember this new index ID
+					// instead.
 					l.Infof("Device %v folder %q has a new index ID (%x)", deviceID, folder.ID, dev.IndexID)
 					fs.Replace(deviceID, nil)
 					fs.SetIndexID(deviceID, dev.IndexID)

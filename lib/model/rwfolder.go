@@ -438,21 +438,16 @@ func (f *rwFolder) pullerIteration(ignores *ignore.Matcher) int {
 			// files where we are connected to at least one device that has
 			// the file.
 
-			available := false
 			devices := folderFiles.Availability(file.Name)
 			for _, dev := range devices {
 				if f.model.ConnectedTo(dev) {
-					available = true
+					f.queue.Push(file.Name, file.Size, file.Modified)
+					changed++
 					break
 				}
 			}
-
-			if available {
-				f.queue.Push(file.Name, file.Size, file.Modified)
-			}
 		}
 
-		changed++
 		return true
 	})
 

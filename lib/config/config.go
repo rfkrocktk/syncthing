@@ -26,7 +26,7 @@ import (
 
 const (
 	OldestHandledVersion = 10
-	CurrentVersion       = 15
+	CurrentVersion       = 16
 	MaxRescanIntervalS   = 365 * 24 * 60 * 60
 )
 
@@ -215,6 +215,9 @@ func (cfg *Configuration) prepare(myID protocol.DeviceID) error {
 	if cfg.Version == 14 {
 		convertV14V15(cfg)
 	}
+	if cfg.Version == 15 {
+		convertV15V16(cfg)
+	}
 
 	// Build a list of available devices
 	existingDevices := make(map[protocol.DeviceID]bool)
@@ -268,6 +271,16 @@ func (cfg *Configuration) prepare(myID protocol.DeviceID) error {
 	}
 
 	return nil
+}
+
+func convertV15V16(cfg *Configuration) {
+	// Set default mtimeWindowS
+
+	for i := range cfg.Folders {
+		cfg.Folders[i].MtimeWindowS = 1
+	}
+
+	cfg.Version = 16
 }
 
 func convertV14V15(cfg *Configuration) {

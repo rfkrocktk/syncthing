@@ -1186,7 +1186,7 @@ func (f jsonFileInfo) MarshalJSON() ([]byte, error) {
 		"deleted":       f.Deleted,
 		"invalid":       f.Invalid,
 		"noPermissions": f.NoPermissions,
-		"modified":      time.Unix(f.Modified, 0),
+		"modified":      protocol.FileInfo(f).ModTime(),
 		"localVersion":  f.LocalVersion,
 		"numBlocks":     len(f.Blocks),
 		"version":       jsonVersionVector(f.Version),
@@ -1204,7 +1204,7 @@ func (f jsonDBFileInfo) MarshalJSON() ([]byte, error) {
 		"deleted":       f.Deleted,
 		"invalid":       f.Invalid,
 		"noPermissions": f.NoPermissions,
-		"modified":      time.Unix(f.Modified, 0),
+		"modified":      db.FileInfoTruncated(f).ModTime(),
 		"localVersion":  f.LocalVersion,
 	})
 }

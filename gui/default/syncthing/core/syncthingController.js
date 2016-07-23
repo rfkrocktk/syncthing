@@ -1313,7 +1313,8 @@ angular.module('syncthing.core')
                 staggeredCleanInterval: 3600,
                 staggeredVersionsPath: "",
                 externalCommand: "",
-                autoNormalize: true
+                autoNormalize: true,
+                mtimeWindowS: 1,
             };
             $scope.editingExisting = false;
             $scope.folderEditor.$setPristine();

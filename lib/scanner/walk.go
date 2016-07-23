@@ -76,6 +76,8 @@ type Config struct {
 	ProgressTickIntervalS int
 	// Signals cancel from the outside - when closed, we should stop walking.
 	Cancel chan struct{}
+	// The granularity with which we compare timestamps to determine if they've changed or not.
+	MtimeWindow time.Duration
 }
 
 type TempNamer interface {
@@ -310,7 +312,8 @@ func (w *walker) walkRegular(relPath string, info os.FileInfo, mtime time.Time, 
 	//  - has the same size as previously
 	cf, ok := w.CurrentFiler.CurrentFile(relPath)
 	permUnchanged := w.IgnorePerms || !cf.HasPermissionBits() || PermsEqual(cf.Permissions, curMode)
-	if ok && permUnchanged && !cf.IsDeleted() && cf.Modified == mtime.Unix() && !cf.IsDirectory() &&
+	timeEqual := cf.ModTime().Truncate(w.MtimeWindow).Equal(mtime.Truncate(w.MtimeWindow))
+	if ok && permUnchanged && !cf.IsDeleted() && timeEqual && !cf.IsDirectory() &&
 		!cf.IsSymlink() && !cf.IsInvalid() && cf.Size == info.Size() {
 		return nil
 	}
@@ -323,7 +326,8 @@ func (w *walker) walkRegular(relPath string, info os.FileInfo, mtime time.Time, 
 		Version:       cf.Version.Update(w.ShortID),
 		Permissions:   curMode & uint32(maskModePerm),
 		NoPermissions: w.IgnorePerms,
-		Modified:      mtime.Unix(),
+		ModifiedS:     mtime.Unix(),
+		ModifiedNs:    int32(mtime.UnixNano() % 1e9),
 		Size:          info.Size(),
 	}
 	l.Debugln("to hash:", relPath, f)
@@ -357,7 +361,8 @@ func (w *walker) walkDir(relPath string, info os.FileInfo, mtime time.Time, dcha
 		Version:       cf.Version.Update(w.ShortID),
 		Permissions:   uint32(info.Mode() & maskModePerm),
 		NoPermissions: w.IgnorePerms,
-		Modified:      mtime.Unix(),
+		ModifiedS:     mtime.Unix(),
+		ModifiedNs:    int32(mtime.UnixNano() % 1e9),
 	}
 	l.Debugln("dir:", relPath, f)
 
@@ -416,7 +421,6 @@ func (w *walker) walkSymlink(absPath, relPath string, dchan chan protocol.FileIn
 		Name:          relPath,
 		Type:          SymlinkType(targetType),
 		Version:       cf.Version.Update(w.ShortID),
-		Modified:      0,
 		NoPermissions: true, // Symlinks don't have permissions of their own
 		Blocks:        blocks,
 	}
@@ -597,4 +601,13 @@ type noMtimeRepo struct{}
 
 func (noMtimeRepo) GetMtime(relPath string, mtime time.Time) time.Time {
 	return mtime
+}
+
+// returns true if the times are equal, +/- the specified granularity
+func timesEqual(a, b time.Time, granularity time.Duration) bool {
+	diff := a.Sub(b)
+	if diff >= 0 {
+		return diff <= granularity
+	}
+	return -diff <= granularity
 }

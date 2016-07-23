@@ -949,6 +949,7 @@ func defaultConfig(myName string) config.Configuration {
 		defaultFolder.Devices = []config.FolderDeviceConfiguration{{DeviceID: myID}}
 		defaultFolder.AutoNormalize = true
 		defaultFolder.MaxConflicts = -1
+		defaultFolder.MtimeWindowS = 1
 	} else {
 		l.Infoln("We will skip creation of a default folder on first start since the proper envvar is set")
 	}

@@ -92,6 +92,7 @@ type rwFolder struct {
 	pause            time.Duration
 	allowSparse      bool
 	checkFreeSpace   bool
+	mtimeWindow      time.Duration
 
 	queue       *jobQueue
 	dbUpdates   chan dbUpdateJob
@@ -123,6 +124,7 @@ func newRWFolder(model *Model, cfg config.FolderConfiguration, ver versioner.Ver
 		allowSparse:      !cfg.DisableSparseFiles,
 		checkFreeSpace:   cfg.MinDiskFreePct != 0,
 		versioner:        ver,
+		mtimeWindow:      time.Duration(cfg.MtimeWindowS) * time.Second,
 
 		queue:       newJobQueue(),
 		pullTimer:   time.NewTimer(time.Second),
@@ -441,7 +443,7 @@ func (f *rwFolder) pullerIteration(ignores *ignore.Matcher) int {
 			devices := folderFiles.Availability(file.Name)
 			for _, dev := range devices {
 				if f.model.ConnectedTo(dev) {
-					f.queue.Push(file.Name, file.Size, file.Modified)
+					f.queue.Push(file.Name, file.Size, file.ModTime())
 					changed++
 					break
 				}
@@ -918,7 +920,8 @@ func (f *rwFolder) handleFile(file protocol.FileInfo, copyChan chan<- copyBlocks
 		// touching the file. If we can't stat the file we'll just pull it.
 		if info, err := osutil.Lstat(realName); err == nil {
 			mtime := f.virtualMtimeRepo.GetMtime(file.Name, info.ModTime())
-			if mtime.Unix() != curFile.Modified || info.Size() != curFile.Size {
+			timeEqual := curFile.ModTime().Truncate(f.mtimeWindow).Equal(mtime.Truncate(f.mtimeWindow))
+			if !timeEqual || info.Size() != curFile.Size {
 				l.Debugln("file modified but not rescanned; not pulling:", realName)
 				// Scan() is synchronous (i.e. blocks until the scan is
 				// completed and returns an error), but a scan can't happen
@@ -1037,8 +1040,7 @@ func (f *rwFolder) shortcutFile(file protocol.FileInfo) error {
 		}
 	}
 
-	t := time.Unix(file.Modified, 0)
-	if err := os.Chtimes(realName, t, t); err != nil {
+	if err := os.Chtimes(realName, file.ModTime(), file.ModTime()); err != nil {
 		// Try using virtual mtimes
 		info, err := os.Stat(realName)
 		if err != nil {
@@ -1047,7 +1049,7 @@ func (f *rwFolder) shortcutFile(file protocol.FileInfo) error {
 			return err
 		}
 
-		f.virtualMtimeRepo.UpdateMtime(file.Name, info.ModTime(), t)
+		f.virtualMtimeRepo.UpdateMtime(file.Name, info.ModTime(), file.ModTime())
 	}
 
 	// This may have been a conflict. We should merge the version vectors so
@@ -1250,7 +1252,7 @@ func (f *rwFolder) performFinish(state *sharedPullerState) error {
 	}
 
 	// Set the correct timestamp on the new file
-	t := time.Unix(state.file.Modified, 0)
+	t := state.file.ModTime()
 	if err := os.Chtimes(state.tempName, t, t); err != nil {
 		// Try using virtual mtimes instead
 		info, err := os.Stat(state.tempName)

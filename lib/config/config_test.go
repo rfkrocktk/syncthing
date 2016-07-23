@@ -103,6 +103,7 @@ func TestDeviceConfig(t *testing.T) {
 				AutoNormalize:   true,
 				MinDiskFreePct:  1,
 				MaxConflicts:    -1,
+				MtimeWindowS:    1,
 			},
 		}
 

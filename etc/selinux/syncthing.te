@@ -1,0 +1,47 @@
+# rpm build will replace this with the RPM version
+policy_module(syncthing, 1.0.0)
+
+gen_require(
+    type unconfined_t;
+)
+
+# SELinux Types
+# -------------------------------------------------------------
+
+# process type for running process
+type syncthing_t;
+
+# file type for the syncthing binary
+type syncthing_exec_t;
+
+# admin tcp port
+type syncthing_admin_port_t;
+# discovery udp port
+type syncthing_discovery_port_t;
+# transfer tcp port
+type syncthing_port_t;
+
+# file type for syncthing config files
+type syncthing_config_t;
+
+# Process Rules
+# -------------------------------------------------------------
+
+domain_type(syncthing_t)
+domain_entry_file(syncthing_t, syncthing_exec_t)
+
+# when executed, transition to the process type
+# init_daemon_domain(syncthing_t, syncthing_exec_t)
+# allow syncthing processes to link to shared libraries
+libs_use_ld_so(syncthing_t)
+# allow syncthing processes to load and exec functions from shared libraries
+libs_use_shared_libs(syncthing_t)
+
+# allow syncthing to read its config
+allow syncthing_t syncthing_config_t:dir list_dir_perms;
+read_files_pattern(syncthing_t, syncthing_config_t, syncthing_config_t)
+
+# ports
+#network_port(syncthing, tcp,22000,s0)
+#network_port(syncthing_discovery, udp,21027,s0)
+#network_port(syncthing_admin, tcp,8384,s0)

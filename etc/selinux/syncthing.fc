@@ -2,5 +2,6 @@
 /usr/bin/syncthing                    -- gen_context(system_u:object_r:syncthing_exec_t,s0)
 
 # config files
-/root/\.config/syncthing(/.*)         -- gen_context(unconfined_u:object_r:syncthing_config_t,s0)
-/home/[-_\w]+/\.config/syncthing(/.*) -- gen_context(unconfined_u:object_r:syncthing_config_t,s0)
+# /root/\.config/syncthing(/.*)         -- gen_context(unconfined_u:object_r:syncthing_config_t,s0)
+HOME_DIR/\.config/syncthing(/.*)?       -d gen_context(unconfined_u:object_r:syncthing_config_t,s0)
+HOME_DIR/\.config/syncthing(/.*)?       -- gen_context(unconfined_u:object_r:syncthing_config_t,s0)

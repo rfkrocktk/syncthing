@@ -5,6 +5,7 @@ gen_require(
     type unconfined_t;
     type user_home_dir_t;
     type config_home_t;
+    type fs_t;
     role unconfined_r;
 )
 
@@ -31,24 +32,36 @@ type syncthing_config_t;
 # -------------------------------------------------------------
 
 role unconfined_r types syncthing_t;
+role unconfined_r types syncthing_config_t;
 role object_r types syncthing_t;
+role object_r types syncthing_config_t;
 
 domtrans_pattern(unconfined_t, syncthing_exec_t, syncthing_t)
 
 # when executed, transition to the process type
 init_daemon_domain(syncthing_t, syncthing_exec_t)
-# allow syncthing processes to link to shared libraries
-libs_use_ld_so(syncthing_t)
-# allow syncthing processes to load and exec functions from shared libraries
-libs_use_shared_libs(syncthing_t)
 
 # allow reading homedirs
-allow syncthing_t user_home_dir_t:dir { getattr search };
-allow syncthing_t config_home_t:dir { getattr search };
+allow syncthing_t user_home_dir_t : dir { getattr search };
+allow syncthing_t config_home_t : dir { getattr search };
 
-# allow syncthing to read its config
-allow syncthing_t syncthing_config_t:dir list_dir_perms;
-read_files_pattern(syncthing_t, syncthing_config_t, syncthing_config_t)
+# allow transition to syncthing_config_t
+allow unconfined_t syncthing_config_t : file { relabelto };
+allow unconfined_t syncthing_config_t : dir { relabelto };
+allow config_home_t syncthing_config_t : file { relabelto };
+allow config_home_t syncthing_config_t : dir { relabelto };
+allow syncthing_config_t fs_t : filesystem { associate };
+
+allow unconfined_t syncthing_config_t : dir { getattr search read open };
+allow unconfined_t syncthing_config_t : file { getattr };
+
+# allow syncthing to read/write its config and database
+rw_files_pattern(syncthing_t, syncthing_config_t, syncthing_config_t)
+create_files_pattern(syncthing_t, syncthing_config_t, syncthing_config_t)
+delete_files_pattern(syncthing_t, syncthing_config_t, syncthing_config_t)
+rename_files_pattern(syncthing_t, syncthing_config_t, syncthing_config_t)
+
+manage_dirs_pattern(syncthing_t, syncthing_config_t, syncthing_config_t)
 
 # ports
 #network_port(syncthing, tcp,22000,s0)

@@ -3,6 +3,7 @@ policy_module(syncthing, 1.0.0)
 
 gen_require(
     type unconfined_t;
+    role unconfined_r;
 )
 
 # SELinux Types
@@ -27,8 +28,9 @@ type syncthing_config_t;
 # Process Rules
 # -------------------------------------------------------------
 
-domain_type(syncthing_t)
-domain_entry_file(syncthing_t, syncthing_exec_t)
+role unconfined_r types syncthing_t;
+
+domtrans_pattern(unconfined_t, syncthing_exec_t, syncthing_t)
 
 # when executed, transition to the process type
 # init_daemon_domain(syncthing_t, syncthing_exec_t)

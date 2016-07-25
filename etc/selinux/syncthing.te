@@ -7,6 +7,7 @@ gen_require(
     type user_home_dir_t;
     type config_home_t;
     type fs_t;
+    type sysctl_net_t;
     type net_conf_t;
     role unconfined_r;
 )
@@ -67,6 +68,10 @@ rw_dirs_pattern(syncthing_t, user_home_t, user_home_t)
 list_dirs_pattern(syncthing_t, user_home_t, user_home_t)
 # allow syncthing to get filesystem attributes (ie fetch security context for a file etc.)
 allow syncthing_t fs_t : filesystem { getattr };
+
+# allow syncthing to read kernel networking config in /proc/sys/net (is publicly readable)
+list_dirs_pattern(syncthing_t, sysctl_net_t, sysctl_net_t)
+read_files_pattern(syncthing_t, sysctl_net_t, sysctl_net_t)
 
 # ports
 type syncthing_port_t;

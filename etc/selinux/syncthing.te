@@ -19,13 +19,6 @@ type syncthing_t;
 # file type for the syncthing binary
 type syncthing_exec_t;
 
-# admin tcp port
-type syncthing_admin_port_t;
-# discovery udp port
-type syncthing_discovery_port_t;
-# transfer tcp port
-type syncthing_port_t;
-
 # file type for syncthing config files
 type syncthing_config_t;
 
@@ -68,6 +61,22 @@ rename_files_pattern(syncthing_t, syncthing_config_t, syncthing_config_t)
 manage_dirs_pattern(syncthing_t, syncthing_config_t, syncthing_config_t)
 
 # ports
+type syncthing_port_t;
+type syncthing_discovery_port_t;
+type syncthing_admin_port_t;
 corenet_port(syncthing_port_t) # tcp port 22000
 corenet_port(syncthing_discovery_port_t) # udp port 21027
 corenet_port(syncthing_admin_port_t) # tcp port 8384
+
+# packets
+type syncthing_packet_t;
+type syncthing_discovery_packet_t;
+type syncthing_admin_packet_t;
+corenet_packet(syncthing_packet_t);
+corenet_packet(syncthing_discovery_packet_t)
+corenet_packet(syncthing_admin_packet_t)
+
+# port permissions
+allow syncthing_t syncthing_port_t:tcp_socket { create };
+allow syncthing_t syncthing_discovery_port_t:udp_socket { create };
+allow syncthing_t syncthing_admin_port_t:tcp_socket { create };

@@ -6,6 +6,7 @@ gen_require(
     type user_home_dir_t;
     type config_home_t;
     type fs_t;
+    type net_conf_t;
     role unconfined_r;
 )
 
@@ -55,6 +56,9 @@ allow syncthing_config_t fs_t : filesystem { associate };
 allow unconfined_t syncthing_config_t : dir { getattr search read open };
 allow unconfined_t syncthing_config_t : file { getattr };
 
+# allow syncthing to read /etc/hosts
+read_files_pattern(syncthing_t, net_conf_t, net_conf_t)
+
 # allow syncthing to read/write its config and database
 rw_files_pattern(syncthing_t, syncthing_config_t, syncthing_config_t)
 create_files_pattern(syncthing_t, syncthing_config_t, syncthing_config_t)
@@ -64,6 +68,6 @@ rename_files_pattern(syncthing_t, syncthing_config_t, syncthing_config_t)
 manage_dirs_pattern(syncthing_t, syncthing_config_t, syncthing_config_t)
 
 # ports
-#network_port(syncthing, tcp,22000,s0)
-#network_port(syncthing_discovery, udp,21027,s0)
-#network_port(syncthing_admin, tcp,8384,s0)
+corenet_port(syncthing_port_t) # tcp port 22000
+corenet_port(syncthing_discovery_port_t) # udp port 21027
+corenet_port(syncthing_admin_port_t) # tcp port 8384

@@ -1,4 +1,3 @@
-# rpm build will replace this with the RPM version
 policy_module(syncthing, 1.0.0)
 
 gen_require(
@@ -9,6 +8,8 @@ gen_require(
     type fs_t;
     type sysctl_net_t;
     type net_conf_t;
+    type http_port_t;
+    type node_t;
     role unconfined_r;
 )
 
@@ -90,9 +91,17 @@ corenet_packet(syncthing_discovery_packet_t)
 corenet_packet(syncthing_admin_packet_t)
 
 # port permissions
-allow syncthing_t self:tcp_socket create_socket_perms;
+allow syncthing_t self:tcp_socket create_stream_socket_perms;
 allow syncthing_t self:udp_socket create_socket_perms;
 
-allow syncthing_t syncthing_port_t:tcp_socket { create name_bind };
-allow syncthing_t syncthing_discovery_port_t:udp_socket { create name_bind };
-allow syncthing_t syncthing_admin_port_t:tcp_socket { create name_bind };
+allow syncthing_t syncthing_port_t:tcp_socket { name_bind };
+allow syncthing_t syncthing_discovery_port_t:udp_socket { name_bind };
+allow syncthing_t syncthing_admin_port_t:tcp_socket { name_bind };
+
+# allow syncthing to connect to its discovery servers over HTTPS
+allow syncthing_t http_port_t:tcp_socket name_connect;
+
+# node_t is an alias for all network interfaces - allow syncthing to connect to tcp sockets and udp sockets over all
+# network interfaces
+allow syncthing_t node_t:tcp_socket node_bind;
+allow syncthing_t node_t:udp_socket node_bind;

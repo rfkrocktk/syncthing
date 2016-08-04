@@ -30,7 +30,6 @@ type syncthing_config_t;
 
 role unconfined_r types syncthing_t;
 role unconfined_r types syncthing_config_t;
-role object_r types syncthing_t;
 role object_r types syncthing_config_t;
 
 domtrans_pattern(unconfined_t, syncthing_exec_t, syncthing_t)

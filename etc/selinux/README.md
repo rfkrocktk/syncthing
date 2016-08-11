@@ -1,12 +1,8 @@
 # Syncthing SELinux Support
 
-## Types
+Requirements:
 
-<dl>
-    <dt>user_home_dir_t</dt>
-    <dd>The actual user's home dir, ie <code>/home/user/</code></dd>
-    <dt>user_home_t</dt>
-    <dd>Files and directories in a user's home directory, ie <code>/home/user/* </code></dd>
-    <dt>config_home_t</dt>
-    <dd>User configuration files, ie <code>/home/user/.config(/.\*)?</code></dd>
-</dl>
+ - userdom_basic_networking(syncthing_t) - allow connecting to tcp/udp sockets
+ - userdom_user_home_content(syncthing_config_t) - mark type as user home content
+ - userdom_user_application_domain(syncthing_t, syncthing_exec_t) - mark as domain
+ - userdom_manage_user_home_content(syncthing_t) - manage all user files

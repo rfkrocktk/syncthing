@@ -1,53 +1,73 @@
 policy_module(syncthing, 1.0.0)
 
-gen_require(
-    type unconfined_t;
-    type user_home_t;
-    type user_home_dir_t;
-    type config_home_t;
-    type fs_t;
-    type sysctl_net_t;
-    type net_conf_t;
-    type http_port_t;
-    type node_t;
-    role unconfined_r;
-)
-
-# SELinux Types
-# -------------------------------------------------------------
-
-# process type for running process
 type syncthing_t;
-
-# file type for the syncthing binary
 type syncthing_exec_t;
 
-# file type for syncthing config files
-type syncthing_config_home_t;
+attribute_role syncthing_roles;
 
-# Process Rules
-# -------------------------------------------------------------
+##########################
+# Define Ports
+##########################
+attribute syncthing_ports;
 
-role unconfined_r types syncthing_t;
-role unconfined_r types syncthing_config_home_t;
-role object_r types syncthing_config_home_t;
+type syncthing_port_t, syncthing_ports;
+type syncthing_admin_port_t, syncthing_ports;
+type syncthing_discovery_port_t, syncthing_ports;
 
-domtrans_pattern(unconfined_t, syncthing_exec_t, syncthing_t)
+corenet_port(syncthing_port_t)
+corenet_port(syncthing_admin_port_t)
+corenet_port(syncthing_discovery_port_t)
 
-# when executed, transition to the process type
-init_daemon_domain(syncthing_t, syncthing_exec_t)
+# packets
+# TODO
 
-type syncthing_port_t;
-type syncthing_admin_port_t;
-type syncthing_discovery_port_t;
+# domain patterns
+userdom_user_application_domain(syncthing_t, syncthing_exec_t)
 
-allow config_home_t syncthing_config_home_t : file { relabelto };
-allow config_home_t syncthing_config_home_t : dir { relabelto };
+#####################
+# Process Permissions
+#####################
+userdom_basic_networking(syncthing_t)
+kernel_read_net_sysctls(syncthing_t)
+fs_getattr_xattr_fs(syncthing_t)
+sysnet_dns_name_resolve(syncthing_t)
 
-allow unconfined_t syncthing_config_home_t : dir { read rmdir unlink remove_name getattr search open write };
-allow unconfined_t syncthing_config_home_t : file { unlink };
-allow unconfined_t syncthing_admin_port_t : tcp_socket name_connect;
+userdom_manage_user_home_content(syncthing_t)
+# bind to generic nodes
+corenet_tcp_bind_generic_node(syncthing_t)
+corenet_udp_bind_generic_node(syncthing_t)
+# bind to syncthing ports
+syncthing_bind_ports(syncthing_t)
 
 
 # define config type as user home content
+gen_require(`
+    type config_home_t;
+')
+
+type syncthing_config_home_t;
 userdom_user_home_content(syncthing_config_home_t)
+filetrans_pattern(syncthing_t, config_home_t, syncthing_config_home_t, dir, "syncthing")
+
+#######
+# Roles
+#######
+role syncthing_roles types syncthing_t;
+
+optional_policy(`
+    gen_require(`
+        type unconfined_t;
+        role unconfined_r;
+    ')
+
+    syncthing_role(unconfined_r, unconfined_t)
+')
+
+optional_policy(`
+    gen_require(`
+        type user_t;
+        role user_r;
+    ')
+
+    syncthing_role(user_r, user_t)
+')

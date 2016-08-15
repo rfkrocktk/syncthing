@@ -1,1 +1,128 @@
-## <summary></summary>
+## e.g. https://github.com/TresysTechnology/refpolicy-contrib/blob/master/mplayer.if#L18
+########################################
+## <summary>
+##	Role access for Syncthing
+## </summary>
+## <param name="role">
+##	<summary>
+##	Role allowed access
+##	</summary>
+## </param>
+## <param name="domain">
+##	<summary>
+##	User domain for the role
+##	</summary>
+## </param>
+#
+interface(`syncthing_role', `
+
+    gen_require(`
+        attribute_role syncthing_roles;
+        type syncthing_t, syncthing_exec_t, syncthing_config_home_t;
+    ')
+
+    # Declarations
+    roleattribute $1 syncthing_roles;
+
+    # Policy
+    domtrans_pattern($2, syncthing_exec_t, syncthing_t)
+')
+
+
+#############################################
+## <summary>
+## Allow binding to the Syncthing admin port.
+## </summary>
+## <param name="domain">
+##  <summary>
+##  Domain allowed access.
+##  </summary>
+## </param>
+#
+interface(`corenet_tcp_bind_syncthing_admin_port', `
+    gen_require(`
+        type syncthing_admin_port_t;
+    ')
+
+    allow $1 syncthing_admin_port_t:tcp_socket name_bind;
+')
+
+################################################
+## <summary>
+## Allow binding to the Syncthing transfer port.
+## </summary>
+## <param name="domain">
+##  <summary>
+##  Domain allowed access.
+##  </summary>
+## </param>
+#
+interface(`corenet_tcp_bind_syncthing_port', `
+    gen_require(`
+        type syncthing_port_t;
+    ')
+
+    allow $1 syncthing_port_t:tcp_socket name_bind;
+')
+
+#################################################
+## <summary>
+## Allow binding to the Syncthing discovery port.
+## </summary>
+## <param name="domain">
+##  <summary>
+##  Domain allowed access.
+##  </summary>
+## </param>
+#
+interface(`corenet_udp_bind_syncthing_discovery_port', `
+    gen_require(`
+        type syncthing_discovery_port_t;
+    ')
+
+    allow $1 syncthing_discovery_port_t:udp_socket name_bind;
+')
+
+#############################################
+## <summary>
+## Allow binding to all Syncthing ports.
+## </summary>
+## <param name="domain">
+##  <summary>
+##  Domain allowed access.
+##  </summary>
+## </param>
+#
+interface(`syncthing_bind_ports', `
+    corenet_tcp_bind_syncthing_admin_port($1)
+    corenet_tcp_bind_syncthing_port($1)
+    corenet_udp_bind_syncthing_discovery_port($1)
+')
+
+#############################################
+## <summary>
+## Define something as an entrypoint to a Syncthing domain.
+## </summary>
+## <param name="domain">
+##  <summary>
+##  Domain allowed access.
+##  </summary>
+## </param>
+## <param>
+##  <summary>
+##   Entry point for the domain.
+##  </summary>
+## </param>
+#
+interface(`syncthing_domain', `
+    # TODO refactor
+    gen_require(`
+        type unconfined_t;
+        role unconfined_r;
+    ')
+
+    userdom_user_application_domain($1, $2)
+    domtrans_pattern(unconfined_t, $2, $1)
+
+    role unconfined_r types $1;
+')

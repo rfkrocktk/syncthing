@@ -31,6 +31,7 @@ userdom_basic_networking(syncthing_t)
 kernel_read_net_sysctls(syncthing_t)
 fs_getattr_xattr_fs(syncthing_t)
 sysnet_dns_name_resolve(syncthing_t)
+kernel_read_system_state(syncthing_t)
 
 userdom_manage_user_home_content(syncthing_t)
 # bind to generic nodes
